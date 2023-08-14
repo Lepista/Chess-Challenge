@@ -9,67 +9,109 @@ namespace ChessBot
     public struct MyBot
     {
         private static readonly int[] KnightOffsets = { -17, -15, -10, -6, 6, 10, 15, 17 };
+        private const int MaxDepth = 3;
 
         public void Think(GameState gameState, TimeSpan remainingTime)
         {
             List<Move> legalMoves = GenerateLegalMoves(gameState);
-            Move bestMove = ChooseBestMove(gameState, legalMoves);
+            Move bestMove = MinimaxAlphaBeta(gameState, MaxDepth, int.MinValue, int.MaxValue).move;
             gameState.PlayMove(bestMove);
         }
 
-        private List<Move> GenerateLegalMoves(GameState gameState)
+        private (int score, Move move) MinimaxAlphaBeta(GameState gameState, int depth, int alpha, int beta)
         {
-            List<Move> legalMoves = new List<Move>();
-            int currentPlayer = gameState.CurrentPlayer;
+            if (depth == 0 || gameState.IsGameOver)
+                return (EvaluatePosition(gameState), null);
+
+            List<Move> legalMoves = GenerateLegalMoves(gameState);
+
+            Move bestMove = null;
+            int bestScore = gameState.CurrentPlayer == 1 ? int.MinValue : int.MaxValue;
+
+            foreach (Move move in legalMoves)
+            {
+                gameState.PlayMove(move);
+                int score = MinimaxAlphaBeta(gameState, depth - 1, alpha, beta).score;
+                gameState.UndoMove(move);
+
+                if (gameState.CurrentPlayer == 1)
+                {
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        bestMove = move;
+                    }
+                    alpha = Math.Max(alpha, bestScore);
+                }
+                else
+                {
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        bestMove = move;
+                    }
+                    beta = Math.Min(beta, bestScore);
+                }
+
+                if (alpha >= beta)
+                    break;
+            }
+
+            return (bestScore, bestMove);
+        }
+
+        private int EvaluatePosition(GameState gameState)
+        {
+            int score = 0;
 
             foreach (Piece piece in gameState.Pieces)
             {
-                if (piece.Color != currentPlayer)
-                    continue;
+                int pieceValue = piece.Color == 1 ? piece.Value : -piece.Value;
+                score += pieceValue;
 
-                switch (piece.Type)
+                if (piece.Type == PieceType.Pawn)
                 {
-                    case PieceType.Knight:
-                        legalMoves.AddRange(GenerateKnightMoves(piece, gameState.Board));
-                        break;
-                    // Add logic for other pieces...
+                    score += piece.Color == 1 ? EvaluatePawnStructure(piece.Position) : -EvaluatePawnStructure(piece.Position);
                 }
+
+                score += EvaluatePieceMobility(piece, gameState);
             }
 
-            return legalMoves;
+            // Add king safety evaluation here...
+
+            return score;
         }
 
-        private List<Move> GenerateKnightMoves(Piece knight, Square[,] board)
+        private int EvaluatePieceMobility(Piece piece, GameState gameState)
         {
-            List<Move> moves = new List<Move>();
+            int mobility = 0;
 
-            foreach (int offset in KnightOffsets)
+            if (piece.Type == PieceType.Knight)
             {
-                int destIndex = knight.Position + offset;
-                if (IsValidSquare(destIndex))
+                foreach (int offset in KnightOffsets)
                 {
-                    Square destSquare = board[destIndex / 8, destIndex % 8];
-                    if (destSquare.IsEmpty || destSquare.Piece.Color != knight.Color)
+                    int destIndex = piece.Position + offset;
+                    if (IsValidSquare(destIndex))
                     {
-                        moves.Add(new Move(knight.Position, destIndex));
+                        if (gameState.Board[destIndex / 8, destIndex % 8].IsEmpty)
+                            mobility++;
                     }
                 }
             }
 
-            return moves;
+            // Add mobility evaluation for other piece types here...
+
+            return mobility;
         }
 
-        private bool IsValidSquare(int index)
+        private int EvaluatePawnStructure(int pawnPosition)
         {
-            return index >= 0 && index < 64;
+            // Implement pawn structure evaluation here...
+            // Example: penalize isolated pawns, reward connected pawns
+
+            return 0;
         }
 
-        private Move ChooseBestMove(GameState gameState, List<Move> legalMoves)
-        {
-            Random random = new Random();
-            int randomIndex = random.Next(0, legalMoves.Count);
-            Move bestMove = legalMoves[randomIndex];
-            return bestMove;
-        }
+        // Other methods as in the previous examples...
     }
 }
